@@ -1,0 +1,2034 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Methods, SVMs & RVMs — Probabilistic ML Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#131c2e',
+                            900: '#0f172a',
+                            950: '#080d1a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar and scientific slider styling */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.4); }
+        ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.5); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.8); }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(100, 116, 139, 0.35);
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            margin-top: -5px;
+            background-color: #38bdf8;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            border: 2px solid #0f172a;
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+            transition: transform 0.12s ease, background-color 0.12s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.18);
+            background-color: #7dd3fc;
+        }
+
+        .math-serif {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-style: italic;
+        }
+        .glass-panel {
+            background: rgba(19, 28, 46, 0.78);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+        html:not(.dark) .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+        }
+        canvas {
+            touch-action: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans min-h-screen flex flex-col selection:bg-sky-500 selection:text-white transition-colors duration-200">
+
+    <!-- Top Navigation & Status Header -->
+    <header class="border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 via-indigo-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-sky-500/20 text-white font-mono font-bold text-lg">
+                    K
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-bold text-base sm:text-lg tracking-tight text-slate-900 dark:text-white">
+                            Probabilistic Kernel Lab
+                        </h1>
+                        <span class="text-[11px] font-mono uppercase px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-medium">
+                            KRR/GP • SVM • RVM
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
+                        Interactive Sparse vs. Dense Kernel Machines, ARD Priors &amp; Regularizer Geometry
+                    </p>
+                </div>
+            </div>
+
+            <!-- Live Sparsity Scorecards -->
+            <div class="flex items-center gap-2 sm:gap-4 flex-wrap">
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 text-xs">
+                    <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+                    <span class="text-slate-500 dark:text-slate-400">GPR / KRR:</span>
+                    <span id="stat-krr-count" class="font-mono font-semibold text-sky-600 dark:text-sky-300">25/25 (100%)</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 text-xs">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    <span class="text-slate-500 dark:text-slate-400">Support Vectors:</span>
+                    <span id="stat-svm-count" class="font-mono font-semibold text-amber-600 dark:text-amber-400">12/25 (48%)</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 text-xs">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    <span class="text-slate-500 dark:text-slate-400">Relevance Vectors:</span>
+                    <span id="stat-rvm-count" class="font-mono font-semibold text-emerald-600 dark:text-emerald-400">4/25 (16%)</span>
+                </div>
+
+                <button id="theme-toggle" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition" title="Toggle Dark/Light Theme">
+                    <svg id="icon-sun" class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <svg id="icon-moon" class="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <main class="max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-5 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+        <!-- LEFT COLUMN: Guided Pedagogical Walkthrough & Controls (4 Cols on LG) -->
+        <aside class="lg:col-span-4 flex flex-col gap-5">
+
+            <!-- Guided Intuition Lab (5 Interactive Lessons) -->
+            <section class="glass-panel rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5 shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 text-[11px] font-mono uppercase tracking-wider bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 rounded-md font-semibold">
+                            Guided Intuition Lab
+                        </span>
+                        <span id="lesson-step-badge" class="text-xs font-mono text-slate-400">Lesson 1 of 5</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button id="prev-lesson-btn" class="px-2 py-1 rounded bg-slate-200/70 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-medium transition">← Prev</button>
+                        <button id="next-lesson-btn" class="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition">Next →</button>
+                    </div>
+                </div>
+
+                <!-- Lesson Selector Pills -->
+                <div class="grid grid-cols-5 gap-1.5 pt-1" id="lesson-tabs">
+                    <button data-lesson="0" class="lesson-tab py-1.5 px-2 rounded-lg text-xs font-mono font-medium transition text-center bg-indigo-600 text-white shadow-sm">1. Dense L2</button>
+                    <button data-lesson="1" class="lesson-tab py-1.5 px-2 rounded-lg text-xs font-mono font-medium transition text-center bg-slate-200/70 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-300/60">2. SVM ε-Tube</button>
+                    <button data-lesson="2" class="lesson-tab py-1.5 px-2 rounded-lg text-xs font-mono font-medium transition text-center bg-slate-200/70 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-300/60">3. RVM & ARD</button>
+                    <button data-lesson="3" class="lesson-tab py-1.5 px-2 rounded-lg text-xs font-mono font-medium transition text-center bg-slate-200/70 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-300/60">4. Priors</button>
+                    <button data-lesson="4" class="lesson-tab py-1.5 px-2 rounded-lg text-xs font-mono font-medium transition text-center bg-slate-200/70 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-300/60">5. Pitfalls</button>
+                </div>
+
+                <!-- Dynamic Lesson Content Box -->
+                <div class="bg-slate-100/90 dark:bg-slate-900/90 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-800 flex flex-col gap-2.5">
+                    <h2 id="lesson-title" class="font-bold text-sm sm:text-base text-slate-900 dark:text-white flex items-center gap-2">
+                        1. From Features to Kernels &amp; Dense L2
+                    </h2>
+                    <div id="lesson-body" class="text-xs sm:text-[13px] leading-relaxed text-slate-600 dark:text-slate-300 space-y-2">
+                        <!-- Populated by JS -->
+                    </div>
+                    <div id="lesson-formula" class="mt-1 py-2 px-3 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/90 font-mono text-[11px] sm:text-xs text-sky-700 dark:text-sky-300 overflow-x-auto">
+                        <!-- Formula populated by JS -->
+                    </div>
+                    <div class="pt-1 flex items-center justify-between gap-2">
+                        <span id="lesson-mission" class="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium italic">
+                            Try clicking on the main plot to add a new point and watch every weight adjust!
+                        </span>
+                        <button id="apply-lesson-preset" class="shrink-0 px-2.5 py-1 rounded-md bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 text-[11px] font-mono font-medium transition">
+                            Reset Demo State
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Model & Hyperparameter Controls -->
+            <section class="glass-panel rounded-2xl p-4 sm:p-5 flex flex-col gap-4 shadow-lg">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <h3 class="font-bold text-sm uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                        Models &amp; Dataset Controls
+                    </h3>
+                    <div class="flex items-center gap-1.5">
+                        <button id="btn-clear-points" class="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-xs font-medium transition">
+                            Clear
+                        </button>
+                        <button id="btn-reset-data" class="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-medium transition">
+                            Regenerate
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preset Dataset Selector -->
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
+                        Preset Dataset Generator (or Click/Drag on Plot)
+                    </label>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        <button data-dataset="sinc" class="dataset-btn py-1.5 px-2 rounded-lg text-xs font-medium border border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-300 transition">
+                            Sinc(x)
+                        </button>
+                        <button data-dataset="sinusoid" class="dataset-btn py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:border-slate-400 transition">
+                            Sinusoid
+                        </button>
+                        <button data-dataset="step" class="dataset-btn py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:border-slate-400 transition">
+                            Step+Outliers
+                        </button>
+                        <button data-dataset="bimodal" class="dataset-btn py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:border-slate-400 transition">
+                            Gap / Clusters
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Models Toggles -->
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
+                        Active Kernel Machines &amp; Visual Overlays
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center gap-2 p-2 rounded-xl border border-sky-500/30 bg-sky-500/5 cursor-pointer select-none">
+                            <input type="checkbox" id="toggle-krr" checked class="rounded text-sky-500 focus:ring-0">
+                            <div class="leading-tight">
+                                <div class="text-xs font-semibold text-sky-600 dark:text-sky-300">KRR / Full GP</div>
+                                <div class="text-[10px] text-slate-500">Dense L2 (Gaussian Prior)</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 rounded-xl border border-amber-500/30 bg-amber-500/5 cursor-pointer select-none">
+                            <input type="checkbox" id="toggle-svm" checked class="rounded text-amber-500 focus:ring-0">
+                            <div class="leading-tight">
+                                <div class="text-xs font-semibold text-amber-600 dark:text-amber-400">SVR (ε-SVM)</div>
+                                <div class="text-[10px] text-slate-500">Margin Sparse (ε-Tube)</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 cursor-pointer select-none">
+                            <input type="checkbox" id="toggle-rvm" checked class="rounded text-emerald-500 focus:ring-0">
+                            <div class="leading-tight">
+                                <div class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">RVM (Sparse Bayes)</div>
+                                <div class="text-[10px] text-slate-500">ARD Student-t Prior</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/5 cursor-pointer select-none">
+                            <input type="checkbox" id="toggle-l1" class="rounded text-fuchsia-500 focus:ring-0">
+                            <div class="leading-tight">
+                                <div class="text-xs font-semibold text-fuchsia-600 dark:text-fuchsia-400">L1 Kernel LASSO</div>
+                                <div class="text-[10px] text-slate-500">Laplace Prior</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Uncertainty & Basis Overlays -->
+                <div class="flex flex-wrap items-center gap-3 pt-1 border-t border-slate-200 dark:border-slate-800/80 text-xs">
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" id="toggle-gp-band" checked class="rounded text-sky-500">
+                        <span>GP 95% Credible Band</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" id="toggle-rvm-band" checked class="rounded text-emerald-500">
+                        <span>RVM 95% Credible Band</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" id="toggle-eps-tube" checked class="rounded text-amber-500">
+                        <span>SVR ε-Insensitive Tube</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" id="toggle-rvm-basis" checked class="rounded text-emerald-500">
+                        <span>Show RVM Kernel Basis</span>
+                    </label>
+                </div>
+
+                <!-- Sliders for Hyperparameters -->
+                <div class="space-y-3.5 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <!-- Kernel Lengthscale l -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-medium text-slate-700 dark:text-slate-300">
+                                RBF Kernel Lengthscale (<span class="math-serif">ℓ</span>)
+                            </span>
+                            <span id="val-lengthscale" class="font-mono text-sky-600 dark:text-sky-400 font-semibold">0.85</span>
+                        </div>
+                        <input type="range" id="slider-lengthscale" min="0.20" max="2.50" step="0.05" value="0.85" class="w-full">
+                        <div class="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                            <span>Wiggly / Local (0.2)</span>
+                            <span>k(x,x') = exp(-||x-x'||² / 2ℓ²)</span>
+                            <span>Smooth / Global (2.5)</span>
+                        </div>
+                    </div>
+
+                    <!-- Regularization Strength lambda -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-medium text-slate-700 dark:text-slate-300">
+                                Regularization Penalty (<span class="math-serif">λ</span> = 1/C)
+                            </span>
+                            <span id="val-lambda" class="font-mono text-sky-600 dark:text-sky-400 font-semibold">0.050</span>
+                        </div>
+                        <input type="range" id="slider-lambda" min="-3" max="0.5" step="0.05" value="-1.30" class="w-full">
+                        <div class="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                            <span>Weak Prior / High C (10⁻³)</span>
+                            <span>Controls L2, SVR &amp; L1 penalty</span>
+                            <span>Strong Prior (10⁰·⁵)</span>
+                        </div>
+                    </div>
+
+                    <!-- SVR Epsilon Tube Width -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-medium text-slate-700 dark:text-slate-300">
+                                SVR <span class="math-serif">ε</span>-Insensitive Tube Width (<span class="math-serif">ε</span>)
+                            </span>
+                            <span id="val-epsilon" class="font-mono text-amber-600 dark:text-amber-400 font-semibold">0.22</span>
+                        </div>
+                        <input type="range" id="slider-epsilon" min="0.03" max="0.65" step="0.01" value="0.22" class="w-full">
+                        <div class="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                            <span>Narrow Tube (Dense SVs)</span>
+                            <span>Points inside ±ε have w_i = 0</span>
+                            <span>Wide Tube (Very Sparse)</span>
+                        </div>
+                    </div>
+
+                    <!-- Observation Noise Variance sigma^2 -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-medium text-slate-700 dark:text-slate-300">
+                                Assumed Noise Std Dev (<span class="math-serif">σ</span>)
+                            </span>
+                            <span id="val-noise" class="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">0.18</span>
+                        </div>
+                        <input type="range" id="slider-noise" min="0.04" max="0.50" step="0.01" value="0.18" class="w-full">
+                        <div class="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                            <span>Low Noise (Tight Band)</span>
+                            <span>Used by GP &amp; RVM Evidence</span>
+                            <span>High Noise (Wide Band)</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </aside>
+
+        <!-- RIGHT COLUMN: Interactive Visual Canvases (8 Cols on LG) -->
+        <section class="lg:col-span-8 flex flex-col gap-5">
+
+            <!-- 1. Main 1D Regression & Credible Interval Playground -->
+            <div class="glass-panel rounded-2xl p-4 sm:p-5 flex flex-col gap-3 shadow-lg">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h2 class="font-bold text-sm sm:text-base text-slate-900 dark:text-white flex items-center gap-2">
+                            <span>Function Space: Predictive Mean, Credible Intervals &amp; Active Vectors</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            <strong>Left-click</strong> empty space to add data • <strong>Drag</strong> points to move • <strong>Shift+Click</strong> or <strong>Right-click</strong> a point to delete
+                        </p>
+                    </div>
+                    <!-- Legend Badges -->
+                    <div class="flex flex-wrap items-center gap-3 text-xs">
+                        <span class="flex items-center gap-1.5">
+                            <span class="w-3 h-0.5 bg-sky-400 inline-block"></span>
+                            <span class="text-slate-600 dark:text-slate-300">KRR / GP Mean</span>
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                            <span class="w-3 h-0.5 bg-amber-400 inline-block"></span>
+                            <span class="text-slate-600 dark:text-slate-300">SVR + ε-Tube</span>
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                            <span class="w-3 h-0.5 bg-emerald-400 inline-block"></span>
+                            <span class="text-slate-600 dark:text-slate-300">RVM Mean</span>
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                            <span class="w-3 h-3 rounded-full border-2 border-amber-400 inline-block"></span>
+                            <span class="text-slate-600 dark:text-slate-300">Support Vector</span>
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                            <span class="w-3.5 h-3.5 rounded-full border-2 border-emerald-400 bg-emerald-400/20 inline-block"></span>
+                            <span class="text-slate-600 dark:text-slate-300">Relevance Vector</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Main Regression Canvas Container -->
+                <div class="relative w-full h-[340px] sm:h-[390px] rounded-xl overflow-hidden bg-slate-900/95 border border-slate-800">
+                    <canvas id="main-plot-canvas" class="w-full h-full block cursor-crosshair"></canvas>
+                    <!-- Floating Hover Readout -->
+                    <div id="plot-tooltip" class="pointer-events-none absolute top-3 right-3 px-3 py-2 rounded-lg bg-slate-950/85 border border-slate-800 text-[11px] font-mono text-slate-300 hidden">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Bottom Split Row: Dual Weight Spectrum Bar Chart + 2D Prior vs Likelihood Geometry -->
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-5">
+
+                <!-- Weight Spectrum & Sparsity Comparison (7 Cols on XL) -->
+                <div class="xl:col-span-7 glass-panel rounded-2xl p-4 sm:p-5 flex flex-col gap-3 shadow-lg">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <h3 class="font-bold text-sm text-slate-900 dark:text-white">
+                                Dual Weight Spectrum (<span class="math-serif">w<sub>i</sub></span> per Data Point <span class="math-serif">x<sub>i</sub></span>)
+                            </h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                Compare dense L2 weights vs. margin-boundary SVs vs. ultra-sparse RVM prototypes (<span class="math-serif">α<sub>i</sub> → ∞ ⇒ w<sub>i</sub> = 0</span>)
+                            </p>
+                        </div>
+                        <div class="text-[11px] font-mono px-2.5 py-1 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                            Hover bars to highlight point <span class="math-serif">i</span>
+                        </div>
+                    </div>
+
+                    <div class="relative w-full h-[250px] rounded-xl overflow-hidden bg-slate-900/95 border border-slate-800">
+                        <canvas id="weights-canvas" class="w-full h-full block"></canvas>
+                    </div>
+
+                    <!-- Mathematical Summary Pill Row -->
+                    <div class="grid grid-cols-3 gap-2 text-[11px]">
+                        <div class="p-2.5 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                            <div class="font-semibold text-sky-600 dark:text-sky-400">KRR / GP Prior</div>
+                            <div class="font-mono text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">p(w) = N(0, λ⁻¹I)</div>
+                            <div class="text-slate-600 dark:text-slate-300 mt-1">Isotropic shrinkage: no weight ever hits exact zero.</div>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                            <div class="font-semibold text-amber-600 dark:text-amber-400">SVR Loss Sparsity</div>
+                            <div class="font-mono text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">max(0, |y - f(x)| - ε)</div>
+                            <div class="text-slate-600 dark:text-slate-300 mt-1">Flat zero-loss zone inside ±ε tube sets interior dual α_i = 0.</div>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                            <div class="font-semibold text-emerald-600 dark:text-emerald-400">RVM ARD Prior</div>
+                            <div class="font-mono text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">p(w_i | α_i) = N(0, α_i⁻¹)</div>
+                            <div class="text-slate-600 dark:text-slate-300 mt-1">Evidence maximization drives redundant α_i → ∞, pruning w_i.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2D Weight Space Regularizer & Prior Geometry (5 Cols on XL) -->
+                <div class="xl:col-span-5 glass-panel rounded-2xl p-4 sm:p-5 flex flex-col gap-3 shadow-lg">
+                    <div class="flex items-center justify-between gap-2">
+                        <div>
+                            <h3 class="font-bold text-sm text-slate-900 dark:text-white">
+                                Weight Space Geometry (<span class="math-serif">w₁</span> vs <span class="math-serif">w₂</span>)
+                            </h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                Prior Contours vs. Data Likelihood Ellipse (Drag the <span class="text-rose-400 font-semibold">MLE Target ⊕</span>)
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Prior Selector Tabs for 2D Contour View -->
+                    <div class="grid grid-cols-4 gap-1 bg-slate-200/70 dark:bg-slate-900 p-1 rounded-xl text-[11px] font-medium">
+                        <button data-prior="l2" class="prior-tab py-1.5 px-2 rounded-lg transition bg-sky-500 text-white shadow">
+                            L2 (Gaussian)
+                        </button>
+                        <button data-prior="l1" class="prior-tab py-1.5 px-2 rounded-lg transition text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                            L1 (Laplace)
+                        </button>
+                        <button data-prior="ard" class="prior-tab py-1.5 px-2 rounded-lg transition text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                            Student-t / ARD
+                        </button>
+                        <button data-prior="svr" class="prior-tab py-1.5 px-2 rounded-lg transition text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                            SVR ε-Zone
+                        </button>
+                    </div>
+
+                    <!-- 2D Contour Canvas -->
+                    <div class="relative w-full h-[220px] rounded-xl overflow-hidden bg-slate-900/95 border border-slate-800">
+                        <canvas id="contour-canvas" class="w-full h-full block cursor-move"></canvas>
+                        <div class="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-[10px] font-mono text-slate-300 bg-slate-950/80 px-2.5 py-1 rounded border border-slate-800/80 pointer-events-none">
+                            <span id="contour-map-coords">MAP w* = (0.62, 0.28)</span>
+                            <span id="contour-sparsity-tag" class="text-sky-400">Dense Solution (w₁≠0, w₂≠0)</span>
+                        </div>
+                    </div>
+
+                    <p id="contour-explanation" class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <strong>L2 / Gaussian Prior:</strong> Circular contours <span class="font-mono">w₁² + w₂² ≤ R²</span> are smooth everywhere. The elliptical data likelihood almost always touches away from the axes, leaving both weights non-zero.
+                    </p>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <!-- Application Logic & Numerical Solvers -->
+    <script>
+        /***********************************************************************
+         * 1. STATE & CONFIGURATION
+         ***********************************************************************/
+        const state = {
+            datasetType: 'sinc',
+            points: [], // Array of { x, y, id }
+            params: {
+                lengthscale: 0.85,
+                lambda: 0.05,       // 10^(-1.3)
+                epsilon: 0.22,
+                noiseStd: 0.18
+            },
+            models: {
+                krr: true,
+                svm: true,
+                rvm: true,
+                l1: false
+            },
+            overlays: {
+                gpBand: true,
+                rvmBand: true,
+                epsTube: true,
+                rvmBasis: true
+            },
+            // Solved model artifacts
+            solution: {
+                krrWeights: [],
+                svmWeights: [],
+                svmBias: 0,
+                svmIsSV: [],
+                rvmWeights: [],
+                rvmAlphas: [],
+                rvmSigma: [], // Posterior covariance matrix over active RVs
+                rvmIsRV: [],
+                l1Weights: []
+            },
+            // UI Interaction states
+            draggingPointIndex: -1,
+            hoveredPointIndex: -1,
+            hoverX: null,
+            // 2D Prior Contour state
+            priorView: 'l2', // 'l2' | 'l1' | 'ard' | 'svr'
+            mleTarget: { w1: 1.15, w2: 0.55 },
+            draggingMLE: false,
+            currentLesson: 0
+        };
+
+        // Plot coordinate bounds: x in [-3.2, 3.2], y in [-1.6, 1.8]
+        const BOUNDS = {
+            xMin: -3.2,
+            xMax: 3.2,
+            yMin: -1.5,
+            yMax: 1.75
+        };
+
+        /***********************************************************************
+         * 2. GUIDED LESSONS DATA
+         ***********************************************************************/
+        const LESSONS = [
+            {
+                title: "1. From Features to Kernels & Dense L2 (KRR / GP)",
+                body: `In Kernel Ridge Regression (KRR) and Gaussian Process Regression (GPR), we place an isotropic Gaussian prior over the weights and use the Representer Theorem to express the predictor as a weighted sum of kernel functions centered at <strong>every</strong> training point. Because the L2 penalty shrinks weights proportionally without sharp corners, every single data point retains a non-zero weight.`,
+                formula: `f(x) = ∑ᵢ₌₁ᴺ wᵢ k(x, xᵢ),   w = (K + λI)⁻¹ y   [100% Dense: all wᵢ ≠ 0]`,
+                mission: `💡 Try: Observe the blue bars in the Dual Weight Spectrum below—every single data point has a non-zero weight!`,
+                preset: () => {
+                    state.datasetType = 'sinc';
+                    state.params.lengthscale = 0.85;
+                    state.params.lambda = 0.05;
+                    state.params.noiseStd = 0.18;
+                    state.models = { krr: true, svm: false, rvm: false, l1: false };
+                    state.overlays.gpBand = true;
+                    state.priorView = 'l2';
+                    generateDataset('sinc');
+                }
+            },
+            {
+                title: "2. Geometric Sparsity in SVMs (The ε-Insensitive Tube)",
+                body: `Support Vector Regression (SVR) achieves sparsity through its <strong>loss function</strong> rather than a sparse prior. By wrapping an <span class="math-serif">ε</span>-insensitive tube around the curve, any data point falling strictly inside the tube incurs <strong>zero loss</strong> and receives a dual weight of exactly <span class="font-mono">wᵢ = 0</span>. Only points on or outside the tube boundary become <strong>Support Vectors</strong> (amber rings).`,
+                formula: `L_ε(y, f(x)) = max(0, |y - f(x)| - ε)  ⇒  Inside ±ε tube: wᵢ = 0`,
+                mission: `💡 Try: Drag the "SVR ε-Tube Width" slider wider and watch interior Support Vectors vanish in real time!`,
+                preset: () => {
+                    state.datasetType = 'sinc';
+                    state.params.lengthscale = 0.85;
+                    state.params.lambda = 0.03;
+                    state.params.epsilon = 0.25;
+                    state.models = { krr: true, svm: true, rvm: false, l1: false };
+                    state.overlays.gpBand = false;
+                    state.overlays.epsTube = true;
+                    state.priorView = 'svr';
+                    if (state.points.length < 10) generateDataset('sinc');
+                }
+            },
+            {
+                title: "3. Probabilistic Sparsity & ARD in RVMs",
+                body: `Tipping's <strong>Relevance Vector Machine (RVM)</strong> replaces the SVM loss with a fully probabilistic Bayesian model using <strong>Automatic Relevance Determination (ARD)</strong>. Each weight <span class="math-serif">wᵢ</span> gets its own independent hyperparameter variance <span class="math-serif">αᵢ⁻¹</span>. Maximizing the marginal likelihood (Type-II ML) drives almost all <span class="math-serif">αᵢ → ∞</span>, pruning their weights to zero and leaving only a handful of prototypical <strong>Relevance Vectors</strong> (emerald halos).`,
+                formula: `p(w | α) = ∏ᵢ N(wᵢ | 0, αᵢ⁻¹),   Update: αᵢⁿᵉʷ = γᵢ / μᵢ²  (most αᵢ → ∞)`,
+                mission: `💡 Try: Notice how RVM uses far fewer vectors than SVM (often 3–5 points located at peaks/inflections) while maintaining a smooth fit!`,
+                preset: () => {
+                    state.datasetType = 'sinc';
+                    state.params.lengthscale = 0.90;
+                    state.params.epsilon = 0.20;
+                    state.params.noiseStd = 0.16;
+                    state.models = { krr: false, svm: true, rvm: true, l1: false };
+                    state.overlays.rvmBand = true;
+                    state.overlays.epsTube = true;
+                    state.overlays.rvmBasis = true;
+                    state.priorView = 'ard';
+                    if (state.points.length < 10) generateDataset('sinc');
+                }
+            },
+            {
+                title: "4. Weight-Space Geometry: L2 vs. L1 vs. Student-t (ARD)",
+                body: `Why does ARD produce dramatically sparser solutions than L2 or even L1? Integrating out the hierarchical Gamma hyperprior <span class="math-serif">p(αᵢ)</span> over <span class="math-serif">N(wᵢ | 0, αᵢ⁻¹)</span> induces a heavy-tailed, sharp-peaked <strong>Student-t prior</strong> whose contours pinch deeply inward along the coordinate axes. In the 2D Weight Space panel (bottom right), drag the red MLE target <span class="text-rose-400">⊕</span> to see how the MAP estimate snaps onto the axes!`,
+                formula: `p(wᵢ) = ∫ N(wᵢ | 0, αᵢ⁻¹) Gamma(αᵢ | a, b) dαᵢ  ∝  (b + wᵢ²/2)⁻⁽ᵃ⁺¹/²⁾`,
+                mission: `💡 Try: Toggle between L2, L1, and Student-t/ARD tabs in the bottom-right panel and drag the red MLE target ⊕ around.`,
+                preset: () => {
+                    state.models = { krr: true, svm: false, rvm: true, l1: true };
+                    state.overlays.gpBand = false;
+                    state.overlays.rvmBand = false;
+                    state.priorView = 'ard';
+                    state.mleTarget = { w1: 1.25, w2: 0.48 };
+                }
+            },
+            {
+                title: "5. The Pitfall of RVMs: Overconfident Extrapolation",
+                body: `Because an RVM prunes away most basis functions and uses only finite localized RBF kernels centered at the surviving Relevance Vectors, its predictive variance <span class="font-mono">σ²(x*) = σ² + φ(x*)ᵀ Σ φ(x*)</span> collapses back down to the bare noise floor <span class="font-mono">σ²</span> whenever <span class="math-serif">x*</span> moves far away from the Relevance Vectors! Compare the sky-blue Full GP uncertainty (which properly grows in data gaps) against the emerald RVM band.`,
+                formula: `As dist(x*, RV) → ∞,  φ(x*) → 0  ⇒  Var_RVM[y*] → σ²  (Overconfident!)`,
+                mission: `💡 Try: Look at the empty gap around x = 0 and at the edges—Full GP uncertainty expands (honest), whereas RVM uncertainty stays narrow!`,
+                preset: () => {
+                    state.datasetType = 'bimodal';
+                    state.params.lengthscale = 0.65;
+                    state.params.noiseStd = 0.16;
+                    state.models = { krr: true, svm: false, rvm: true, l1: false };
+                    state.overlays.gpBand = true;
+                    state.overlays.rvmBand = true;
+                    state.overlays.rvmBasis = true;
+                    generateDataset('bimodal');
+                }
+            }
+        ];
+
+        /***********************************************************************
+         * 3. SYNTHETIC DATASET GENERATORS
+         ***********************************************************************/
+        // Deterministic pseudo-random helper for clean repeatable demos
+        let rngSeed = 42;
+        function seededRandom() {
+            rngSeed = (rngSeed * 1664525 + 1013904223) % 4294967296;
+            return rngSeed / 4294967296;
+        }
+        function randn() {
+            const u1 = Math.max(1e-7, seededRandom());
+            const u2 = seededRandom();
+            return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+        }
+
+        function generateDataset(type, customSeed = null) {
+            if (customSeed !== null) rngSeed = customSeed;
+            else rngSeed = 1337 + type.length * 97;
+
+            const pts = [];
+            const N = 24;
+
+            if (type === 'sinc') {
+                for (let i = 0; i < N; i++) {
+                    const x = -2.8 + (5.6 * i) / (N - 1);
+                    const r = Math.abs(x * 2.2) < 1e-5 ? 1.0 : Math.sin(x * 2.2) / (x * 2.2);
+                    const y = 1.15 * r + 0.11 * randn();
+                    pts.push({ x, y, id: i });
+                }
+            } else if (type === 'sinusoid') {
+                for (let i = 0; i < N; i++) {
+                    const x = -2.8 + (5.6 * i) / (N - 1);
+                    const y = 0.9 * Math.sin(1.4 * x) + 0.25 * Math.cos(2.7 * x) + 0.13 * randn();
+                    pts.push({ x, y, id: i });
+                }
+            } else if (type === 'step') {
+                for (let i = 0; i < N; i++) {
+                    const x = -2.8 + (5.6 * i) / (N - 1);
+                    let y = (x < -0.5 ? -0.65 : (x < 1.1 ? 0.75 : -0.35)) + 0.10 * randn();
+                    if (i === 5) y += 0.95; // Outlier 1
+                    if (i === 17) y -= 0.90; // Outlier 2
+                    pts.push({ x, y, id: i });
+                }
+            } else if (type === 'bimodal') {
+                // Two tight clusters separated by an empty gap around x in [-0.85, 0.85]
+                const clusterX = [
+                    -2.5, -2.35, -2.18, -2.0, -1.82, -1.65, -1.48, -1.32, -1.15, -1.0,
+                     1.0,  1.15,  1.32,  1.48,  1.65,  1.82,  2.0,  2.18,  2.35,  2.5
+                ];
+                clusterX.forEach((x, i) => {
+                    const y = 0.85 * Math.sin(1.5 * x) + 0.11 * randn();
+                    pts.push({ x, y, id: i });
+                });
+            }
+
+            state.points = pts;
+            updateDatasetButtonsUI();
+            solveAllModels();
+        }
+
+        /***********************************************************************
+         * 4. MATHEMATICAL & NUMERICAL SOLVERS (KRR/GP, SVR, RVM, L1)
+         ***********************************************************************/
+
+        // RBF Kernel Function
+        function rbfKernel(x1, x2, l) {
+            const d = x1 - x2;
+            return Math.exp(-(d * d) / (2 * l * l));
+        }
+
+        // Dense Linear System Solver A * x = b via Gaussian Elimination with Partial Pivoting
+        function solveLinearSystem(A, b) {
+            const n = b.length;
+            if (n === 0) return [];
+            const M = A.map((row, i) => [...row, b[i]]);
+
+            for (let i = 0; i < n; i++) {
+                // Find pivot
+                let maxRow = i;
+                let maxVal = Math.abs(M[i][i]);
+                for (let k = i + 1; k < n; k++) {
+                    if (Math.abs(M[k][i]) > maxVal) {
+                        maxVal = Math.abs(M[k][i]);
+                        maxRow = k;
+                    }
+                }
+                const tmp = M[i];
+                M[i] = M[maxRow];
+                M[maxRow] = tmp;
+
+                const pivot = M[i][i];
+                const safePivot = Math.abs(pivot) < 1e-10 ? (pivot >= 0 ? 1e-10 : -1e-10) : pivot;
+
+                for (let k = i + 1; k < n; k++) {
+                    const factor = M[k][i] / safePivot;
+                    for (let j = i; j <= n; j++) {
+                        M[k][j] -= factor * M[i][j];
+                    }
+                }
+            }
+
+            const x = new Array(n).fill(0);
+            for (let i = n - 1; i >= 0; i--) {
+                let sum = M[i][n];
+                for (let j = i + 1; j < n; j++) {
+                    sum -= M[i][j] * x[j];
+                }
+                const pivot = M[i][i];
+                const safePivot = Math.abs(pivot) < 1e-10 ? 1e-10 : pivot;
+                x[i] = sum / safePivot;
+            }
+            return x;
+        }
+
+        // Matrix Inversion via Gauss-Jordan (used for RVM and GP Posterior Covariance)
+        function invertMatrix(A) {
+            const n = A.length;
+            if (n === 0) return [];
+            const M = A.map((row, i) => {
+                const idRow = new Array(n).fill(0);
+                idRow[i] = 1;
+                return [...row, ...idRow];
+            });
+
+            for (let i = 0; i < n; i++) {
+                let maxRow = i;
+                for (let k = i + 1; k < n; k++) {
+                    if (Math.abs(M[k][i]) > Math.abs(M[maxRow][i])) maxRow = k;
+                }
+                const tmp = M[i];
+                M[i] = M[maxRow];
+                M[maxRow] = tmp;
+
+                let pivot = M[i][i];
+                if (Math.abs(pivot) < 1e-10) pivot = 1e-10;
+                for (let j = 0; j < 2 * n; j++) M[i][j] /= pivot;
+
+                for (let k = 0; k < n; k++) {
+                    if (k !== i) {
+                        const factor = M[k][i];
+                        for (let j = 0; j < 2 * n; j++) {
+                            M[k][j] -= factor * M[i][j];
+                        }
+                    }
+                }
+            }
+            return M.map(row => row.slice(n, 2 * n));
+        }
+
+        /**
+         * 4A. Solve Kernel Ridge Regression / Exact GP
+         * w = (K + lambda * I)^(-1) y
+         */
+        function solveKRR(K, y, lambda) {
+            const n = y.length;
+            const A = K.map((row, i) => row.map((val, j) => val + (i === j ? lambda : 0)));
+            return solveLinearSystem(A, y);
+        }
+
+        /**
+         * 4B. Solve Support Vector Regression (SVR) in Dual Form
+         * Dual problem:
+         *   max_{beta} -0.5 * beta^T K beta + y^T beta - eps * sum(|beta_i|)
+         *   subject to beta_i in [-C, C]
+         * Solved via Fast Coordinate Ascent / Soft-Thresholding on Dual Variables
+         */
+        function solveSVR(K, y, lambda, eps) {
+            const n = y.length;
+            if (n === 0) return { weights: [], bias: 0, isSV: [] };
+
+            const C = 1.0 / Math.max(1e-4, lambda);
+            const beta = new Array(n).fill(0);
+            const maxIter = 350;
+            const tol = 1e-5;
+
+            // Compute mean offset for stability
+            const bias = 0;
+
+            for (let iter = 0; iter < maxIter; iter++) {
+                let maxDiff = 0;
+                for (let i = 0; i < n; i++) {
+                    // Compute sum_{j != i} K_ij beta_j
+                    let predNoI = 0;
+                    const Ki = K[i];
+                    for (let j = 0; j < n; j++) {
+                        if (j !== i) predNoI += Ki[j] * beta[j];
+                    }
+                    const residual = y[i] - bias - predNoI;
+                    const Kii = Ki[i] + 1e-6; // Diagonal is ~1.0 for RBF
+
+                    // Soft-thresholding operator with box constraint [-C, C]
+                    let newBeta = 0;
+                    if (residual > eps) {
+                        newBeta = Math.min(C, (residual - eps) / Kii);
+                    } else if (residual < -eps) {
+                        newBeta = Math.max(-C, (residual + eps) / Kii);
+                    } else {
+                        newBeta = 0;
+                    }
+
+                    const diff = Math.abs(newBeta - beta[i]);
+                    if (diff > maxDiff) maxDiff = diff;
+                    beta[i] = newBeta;
+                }
+                if (maxDiff < tol) break;
+            }
+
+            const isSV = beta.map(b => Math.abs(b) > 1e-4);
+            return { weights: beta, bias, isSV };
+        }
+
+        /**
+         * 4C. Solve Relevance Vector Machine (RVM) via Sparse Bayesian Learning (MacKay / Tipping ARD)
+         * Model: y = Phi * w + noise, where Phi_ij = k(x_i, x_j)
+         * Prior: w_i ~ N(0, alpha_i^-1)
+         * Iterative Evidence Maximization updates:
+         *   Sigma = (beta * Phi^T Phi + diag(alpha))^-1
+         *   mu = beta * Sigma * Phi^T y
+         *   gamma_i = 1 - alpha_i * Sigma_ii
+         *   alpha_i_new = gamma_i / (mu_i^2)
+         * Active set pruning when alpha_i > ALPHA_MAX (e.g., 1e5)
+         */
+        function solveRVM(K, y, noiseStd) {
+            const n = y.length;
+            if (n === 0) return { weights: [], alphas: [], sigmaActive: [], activeIndices: [], isRV: [] };
+
+            const beta = 1.0 / Math.max(1e-4, noiseStd * noiseStd); // Inverse noise variance
+            const ALPHA_MAX = 1e4;
+
+            // Active indices of basis functions
+            let active = Array.from({ length: n }, (_, i) => i);
+            let alphas = new Array(n).fill(1.0);
+
+            const maxIter = 75;
+            let muActive = [];
+            let sigmaActive = [];
+
+            for (let iter = 0; iter < maxIter; iter++) {
+                const m = active.length;
+                if (m === 0) break;
+
+                // Construct A = beta * Phi_active^T * Phi_active + diag(alpha_active)
+                const A = Array.from({ length: m }, () => new Array(m).fill(0));
+                const rhs = new Array(m).fill(0);
+
+                for (let a = 0; a < m; a++) {
+                    const idxA = active[a];
+                    // Compute Phi_a^T * y
+                    let dotY = 0;
+                    for (let i = 0; i < n; i++) {
+                        dotY += K[i][idxA] * y[i];
+                    }
+                    rhs[a] = beta * dotY;
+
+                    for (let b = a; b < m; b++) {
+                        const idxB = active[b];
+                        let dotPhi = 0;
+                        for (let i = 0; i < n; i++) {
+                            dotPhi += K[i][idxA] * K[i][idxB];
+                        }
+                        const val = beta * dotPhi + (a === b ? alphas[idxA] : 0);
+                        A[a][b] = val;
+                        A[b][a] = val;
+                    }
+                }
+
+                // Invert A to get Posterior Covariance Sigma over active weights
+                sigmaActive = invertMatrix(A);
+
+                // Compute posterior mean mu = Sigma * rhs
+                muActive = new Array(m).fill(0);
+                for (let a = 0; a < m; a++) {
+                    let s = 0;
+                    for (let b = 0; b < m; b++) {
+                        s += sigmaActive[a][b] * rhs[b];
+                    }
+                    muActive[a] = s;
+                }
+
+                // MacKay / EM update for alpha_i
+                let maxDelta = 0;
+                const nextActive = [];
+                for (let a = 0; a < m; a++) {
+                    const idx = active[a];
+                    const sig_aa = Math.max(0, sigmaActive[a][a]);
+                    const gamma_a = Math.max(1e-6, 1.0 - alphas[idx] * sig_aa);
+                    const mu2 = muActive[a] * muActive[a];
+
+                    // Update alpha
+                    const newAlpha = gamma_a / Math.max(1e-9, mu2);
+                    const relChange = Math.abs(newAlpha - alphas[idx]) / (alphas[idx] + 1.0);
+                    if (relChange > maxDelta) maxDelta = relChange;
+
+                    alphas[idx] = Math.min(ALPHA_MAX * 10, newAlpha);
+                    if (alphas[idx] < ALPHA_MAX && Math.abs(muActive[a]) > 1e-3) {
+                        nextActive.push(idx);
+                    }
+                }
+
+                // Keep at least 1 relevance vector if data is non-trivial
+                if (nextActive.length === 0 && active.length > 0) {
+                    nextActive.push(active[0]);
+                    break;
+                }
+
+                const prunedCount = active.length - nextActive.length;
+                active = nextActive;
+                if (prunedCount === 0 && maxDelta < 1e-3 && iter > 10) {
+                    break;
+                }
+            }
+
+            // Final exact posterior polish on the surviving active Relevance Vectors
+            const m = active.length;
+            const A = Array.from({ length: m }, () => new Array(m).fill(0));
+            const rhs = new Array(m).fill(0);
+            for (let a = 0; a < m; a++) {
+                const idxA = active[a];
+                let dotY = 0;
+                for (let i = 0; i < n; i++) dotY += K[i][idxA] * y[i];
+                rhs[a] = beta * dotY;
+                for (let b = a; b < m; b++) {
+                    const idxB = active[b];
+                    let dotPhi = 0;
+                    for (let i = 0; i < n; i++) dotPhi += K[i][idxA] * K[i][idxB];
+                    const val = beta * dotPhi + (a === b ? alphas[idxA] : 0);
+                    A[a][b] = val;
+                    A[b][a] = val;
+                }
+            }
+            sigmaActive = invertMatrix(A);
+            muActive = new Array(m).fill(0);
+            for (let a = 0; a < m; a++) {
+                let s = 0;
+                for (let b = 0; b < m; b++) s += sigmaActive[a][b] * rhs[b];
+                muActive[a] = s;
+            }
+
+            const fullWeights = new Array(n).fill(0);
+            const isRV = new Array(n).fill(false);
+            active.forEach((idx, a) => {
+                fullWeights[idx] = muActive[a];
+                isRV[idx] = true;
+            });
+
+            return {
+                weights: fullWeights,
+                alphas,
+                sigmaActive,
+                activeIndices: active,
+                isRV
+            };
+        }
+
+        /**
+         * 4D. Solve L1 Kernel LASSO via Coordinate Descent (ISTA / Soft-Thresholding)
+         * min_w  0.5 * ||y - K w||^2 + lambda_1 * ||w||_1
+         */
+        function solveL1Kernel(K, y, lambda) {
+            const n = y.length;
+            if (n === 0) return [];
+            const w = new Array(n).fill(0);
+            const l1Pen = Math.max(0.01, lambda * 2.2);
+
+            // Precompute column norms G_jj = (K^T K)_jj and C_j = (K^T y)_j
+            const G = Array.from({ length: n }, () => new Array(n).fill(0));
+            const Ky = new Array(n).fill(0);
+            for (let i = 0; i < n; i++) {
+                let ky = 0;
+                for (let m = 0; m < n; m++) ky += K[m][i] * y[m];
+                Ky[i] = ky;
+                for (let j = i; j < n; j++) {
+                    let dot = 0;
+                    for (let m = 0; m < n; m++) dot += K[m][i] * K[m][j];
+                    G[i][j] = dot;
+                    G[j][i] = dot;
+                }
+            }
+
+            for (let iter = 0; iter < 220; iter++) {
+                let maxDiff = 0;
+                for (let i = 0; i < n; i++) {
+                    let dot = 0;
+                    const Gi = G[i];
+                    for (let j = 0; j < n; j++) {
+                        if (j !== i) dot += Gi[j] * w[j];
+                    }
+                    const rho = Ky[i] - dot;
+                    const gii = Gi[i] + 1e-5;
+                    let wNew = 0;
+                    if (rho > l1Pen) wNew = (rho - l1Pen) / gii;
+                    else if (rho < -l1Pen) wNew = (rho + l1Pen) / gii;
+
+                    const d = Math.abs(wNew - w[i]);
+                    if (d > maxDiff) maxDiff = d;
+                    w[i] = wNew;
+                }
+                if (maxDiff < 1e-4) break;
+            }
+            return w;
+        }
+
+        /**
+         * Master Solver Trigger
+         */
+        function solveAllModels() {
+            const pts = state.points;
+            const n = pts.length;
+            if (n === 0) {
+                state.solution = {
+                    krrWeights: [], svmWeights: [], svmBias: 0, svmIsSV: [],
+                    rvmWeights: [], rvmAlphas: [], rvmSigma: [], rvmActiveIndices: [], rvmIsRV: [],
+                    l1Weights: [], KinvGP: []
+                };
+                updateScorecards();
+                renderAll();
+                return;
+            }
+
+            const l = state.params.lengthscale;
+            const lambda = state.params.lambda;
+            const eps = state.params.epsilon;
+            const noiseStd = state.params.noiseStd;
+
+            // Build Gram Matrix K
+            const K = Array.from({ length: n }, (_, i) =>
+                Array.from({ length: n }, (__, j) => rbfKernel(pts[i].x, pts[j].x, l))
+            );
+            const y = pts.map(p => p.y);
+
+            // 1. KRR / GP
+            const krrWeights = solveKRR(K, y, lambda);
+            // GP covariance matrix (K + sigma^2 I)^-1 for credible bands
+            const sigma2 = noiseStd * noiseStd;
+            const Kgp = K.map((row, i) => row.map((v, j) => v + (i === j ? sigma2 : 0)));
+            const KinvGP = invertMatrix(Kgp);
+
+            // 2. SVR
+            const svrRes = solveSVR(K, y, lambda, eps);
+
+            // 3. RVM
+            const rvmRes = solveRVM(K, y, noiseStd);
+
+            // 4. L1 Kernel LASSO
+            const l1Weights = solveL1Kernel(K, y, lambda);
+
+            state.solution = {
+                krrWeights,
+                KinvGP,
+                svmWeights: svrRes.weights,
+                svmBias: svrRes.bias,
+                svmIsSV: svrRes.isSV,
+                rvmWeights: rvmRes.weights,
+                rvmAlphas: rvmRes.alphas,
+                rvmSigma: rvmRes.sigmaActive,
+                rvmActiveIndices: rvmRes.activeIndices,
+                rvmIsRV: rvmRes.isRV,
+                l1Weights
+            };
+
+            updateScorecards();
+            renderAll();
+        }
+
+        function updateScorecards() {
+            const n = state.points.length;
+            const svCount = state.solution.svmIsSV ? state.solution.svmIsSV.filter(Boolean).length : 0;
+            const rvCount = state.solution.rvmIsRV ? state.solution.rvmIsRV.filter(Boolean).length : 0;
+
+            const pct = (c) => n > 0 ? Math.round((c / n) * 100) : 0;
+            document.getElementById('stat-krr-count').textContent = `${n}/${n} (${n > 0 ? 100 : 0}%)`;
+            document.getElementById('stat-svm-count').textContent = `${svCount}/${n} (${pct(svCount)}%)`;
+            document.getElementById('stat-rvm-count').textContent = `${rvCount}/${n} (${pct(rvCount)}%)`;
+        }
+
+        /***********************************************************************
+         * 5. CANVAS RENDERING: MAIN FUNCTION PLOT, WEIGHT BAR CHART & 2D CONTOUR
+         ***********************************************************************/
+        const mainCanvas = document.getElementById('main-plot-canvas');
+        const weightsCanvas = document.getElementById('weights-canvas');
+        const contourCanvas = document.getElementById('contour-canvas');
+
+        function setupHiDPICanvas(canvas) {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            if (canvas.width !== Math.round(rect.width * dpr) || canvas.height !== Math.round(rect.height * dpr)) {
+                canvas.width = Math.round(rect.width * dpr);
+                canvas.height = Math.round(rect.height * dpr);
+            }
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            return { ctx, width: rect.width, height: rect.height };
+        }
+
+        // Coordinate transforms for Main Plot
+        function xToPx(x, width) {
+            return ((x - BOUNDS.xMin) / (BOUNDS.xMax - BOUNDS.xMin)) * width;
+        }
+        function yToPx(y, height) {
+            return height - ((y - BOUNDS.yMin) / (BOUNDS.yMax - BOUNDS.yMin)) * height;
+        }
+        function pxToX(px, width) {
+            return BOUNDS.xMin + (px / width) * (BOUNDS.xMax - BOUNDS.xMin);
+        }
+        function pxToY(py, height) {
+            return BOUNDS.yMin + ((height - py) / height) * (BOUNDS.yMax - BOUNDS.yMin);
+        }
+
+        function evalKernelExpansion(x, pts, weights, l, bias = 0) {
+            let sum = bias;
+            for (let i = 0; i < pts.length; i++) {
+                const w = weights[i];
+                if (w !== 0) {
+                    sum += w * rbfKernel(x, pts[i].x, l);
+                }
+            }
+            return sum;
+        }
+
+        // Evaluate Full GP Predictive Variance at x*
+        function evalGPStd(x, pts, KinvGP, l, noiseStd) {
+            const n = pts.length;
+            const sigma2 = noiseStd * noiseStd;
+            const kStar = new Array(n);
+            for (let i = 0; i < n; i++) kStar[i] = rbfKernel(x, pts[i].x, l);
+
+            let quad = 0;
+            for (let i = 0; i < n; i++) {
+                let rowSum = 0;
+                const row = KinvGP[i];
+                for (let j = 0; j < n; j++) {
+                    rowSum += row[j] * kStar[j];
+                }
+                quad += kStar[i] * rowSum;
+            }
+            // Prior variance k(x*, x*) = 1.0 + observation noise sigma^2 - information gain quad
+            const predVar = Math.max(sigma2 * 0.25, 1.0 + sigma2 - quad);
+            return Math.sqrt(predVar);
+        }
+
+        // Evaluate RVM Predictive Std Dev at x*: sqrt(sigma^2 + phi(x*)^T Sigma phi(x*))
+        function evalRVMStd(x, pts, activeIndices, rvmSigma, l, noiseStd) {
+            const sigma2 = noiseStd * noiseStd;
+            const m = activeIndices ? activeIndices.length : 0;
+            if (m === 0) return noiseStd;
+
+            const phi = new Array(m);
+            for (let a = 0; a < m; a++) {
+                phi[a] = rbfKernel(x, pts[activeIndices[a]].x, l);
+            }
+            let quad = 0;
+            for (let a = 0; a < m; a++) {
+                let s = 0;
+                for (let b = 0; b < m; b++) {
+                    s += rvmSigma[a][b] * phi[b];
+                }
+                quad += phi[a] * s;
+            }
+            return Math.sqrt(Math.max(1e-5, sigma2 + quad));
+        }
+
+        function renderMainPlot() {
+            const { ctx, width, height } = setupHiDPICanvas(mainCanvas);
+            ctx.clearRect(0, 0, width, height);
+
+            // Background Grid
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+            ctx.lineWidth = 1;
+            for (let gx = -3; gx <= 3; gx += 1) {
+                const px = xToPx(gx, width);
+                ctx.beginPath();
+                ctx.moveTo(px, 0);
+                ctx.lineTo(px, height);
+                ctx.stroke();
+
+                ctx.fillStyle = 'rgba(148, 163, 184, 0.45)';
+                ctx.font = '10px JetBrains Mono';
+                ctx.fillText(`x=${gx}`, px + 4, height - 6);
+            }
+            for (let gy = -1.0; gy <= 1.5; gy += 0.5) {
+                const py = yToPx(gy, height);
+                ctx.beginPath();
+                ctx.moveTo(0, py);
+                ctx.lineTo(width, py);
+                ctx.stroke();
+                if (Math.abs(gy) < 1e-4) {
+                    ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
+                    ctx.stroke();
+                    ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+                }
+            }
+
+            const pts = state.points;
+            const n = pts.length;
+            const l = state.params.lengthscale;
+            const sol = state.solution;
+
+            // Sample x grid for smooth curves
+            const numSteps = 180;
+            const xs = [];
+            for (let s = 0; s <= numSteps; s++) {
+                xs.push(BOUNDS.xMin + (s / numSteps) * (BOUNDS.xMax - BOUNDS.xMin));
+            }
+
+            if (n > 0) {
+                // 1. Draw RVM Active Basis Functions (at bottom of plot) if enabled
+                if (state.models.rvm && state.overlays.rvmBasis && sol.rvmActiveIndices) {
+                    sol.rvmActiveIndices.forEach(idx => {
+                        const rvPt = pts[idx];
+                        const w_i = sol.rvmWeights[idx];
+                        ctx.beginPath();
+                        xs.forEach((x, s) => {
+                            const basisVal = w_i * rbfKernel(x, rvPt.x, l);
+                            const px = xToPx(x, width);
+                            const py = yToPx(basisVal, height);
+                            if (s === 0) ctx.moveTo(px, py);
+                            else ctx.lineTo(px, py);
+                        });
+                        ctx.strokeStyle = 'rgba(52, 211, 153, 0.28)';
+                        ctx.setLineDash([3, 3]);
+                        ctx.lineWidth = 1.2;
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    });
+                }
+
+                // 2. Draw Full GP 95% Credible Band
+                if (state.models.krr && state.overlays.gpBand) {
+                    const upper = [];
+                    const lower = [];
+                    xs.forEach(x => {
+                        const mean = evalKernelExpansion(x, pts, sol.krrWeights, l);
+                        const std = evalGPStd(x, pts, sol.KinvGP, l, state.params.noiseStd);
+                        upper.push({ x, y: mean + 1.96 * std });
+                        lower.push({ x, y: mean - 1.96 * std });
+                    });
+
+                    ctx.beginPath();
+                    upper.forEach((p, idx) => {
+                        const px = xToPx(p.x, width);
+                        const py = yToPx(p.y, height);
+                        if (idx === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    });
+                    for (let idx = lower.length - 1; idx >= 0; idx--) {
+                        ctx.lineTo(xToPx(lower[idx].x, width), yToPx(lower[idx].y, height));
+                    }
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(56, 189, 248, 0.13)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+
+                // 3. Draw RVM 95% Credible Band
+                if (state.models.rvm && state.overlays.rvmBand) {
+                    const upper = [];
+                    const lower = [];
+                    xs.forEach(x => {
+                        const mean = evalKernelExpansion(x, pts, sol.rvmWeights, l);
+                        const std = evalRVMStd(x, pts, sol.rvmActiveIndices, sol.rvmSigma, l, state.params.noiseStd);
+                        upper.push({ x, y: mean + 1.96 * std });
+                        lower.push({ x, y: mean - 1.96 * std });
+                    });
+
+                    ctx.beginPath();
+                    upper.forEach((p, idx) => {
+                        const px = xToPx(p.x, width);
+                        const py = yToPx(p.y, height);
+                        if (idx === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    });
+                    for (let idx = lower.length - 1; idx >= 0; idx--) {
+                        ctx.lineTo(xToPx(lower[idx].x, width), yToPx(lower[idx].y, height));
+                    }
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(16, 185, 129, 0.14)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(16, 185, 129, 0.32)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+
+                // 4. Draw SVR Epsilon-Insensitive Tube
+                if (state.models.svm && state.overlays.epsTube) {
+                    const eps = state.params.epsilon;
+                    const upper = [];
+                    const lower = [];
+                    xs.forEach(x => {
+                        const mean = evalKernelExpansion(x, pts, sol.svmWeights, l, sol.svmBias);
+                        upper.push({ x, y: mean + eps });
+                        lower.push({ x, y: mean - eps });
+                    });
+
+                    // Shaded tube
+                    ctx.beginPath();
+                    upper.forEach((p, idx) => {
+                        if (idx === 0) ctx.moveTo(xToPx(p.x, width), yToPx(p.y, height));
+                        else ctx.lineTo(xToPx(p.x, width), yToPx(p.y, height));
+                    });
+                    for (let idx = lower.length - 1; idx >= 0; idx--) {
+                        ctx.lineTo(xToPx(lower[idx].x, width), yToPx(lower[idx].y, height));
+                    }
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(245, 158, 11, 0.10)';
+                    ctx.fill();
+
+                    // Dashed tube boundaries
+                    ctx.setLineDash([5, 5]);
+                    ctx.strokeStyle = 'rgba(245, 158, 11, 0.55)';
+                    ctx.lineWidth = 1.25;
+                    ctx.beginPath();
+                    upper.forEach((p, idx) => {
+                        if (idx === 0) ctx.moveTo(xToPx(p.x, width), yToPx(p.y, height));
+                        else ctx.lineTo(xToPx(p.x, width), yToPx(p.y, height));
+                    });
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    lower.forEach((p, idx) => {
+                        if (idx === 0) ctx.moveTo(xToPx(p.x, width), yToPx(p.y, height));
+                        else ctx.lineTo(xToPx(p.x, width), yToPx(p.y, height));
+                    });
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // 5. Draw Predictive Mean Curves
+                const drawCurve = (weights, bias, color, lineWidth = 2.5, dash = []) => {
+                    ctx.beginPath();
+                    ctx.setLineDash(dash);
+                    xs.forEach((x, idx) => {
+                        const y = evalKernelExpansion(x, pts, weights, l, bias);
+                        const px = xToPx(x, width);
+                        const py = yToPx(y, height);
+                        if (idx === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    });
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = lineWidth;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                };
+
+                if (state.models.krr) drawCurve(sol.krrWeights, 0, '#38bdf8', 2.4);
+                if (state.models.l1)  drawCurve(sol.l1Weights, 0, '#e879f9', 2.0, [6, 3]);
+                if (state.models.svm) drawCurve(sol.svmWeights, sol.svmBias, '#fbbf24', 2.4);
+                if (state.models.rvm) drawCurve(sol.rvmWeights, 0, '#34d399', 2.8);
+            }
+
+            // 6. Draw Training Points, Support Vector Rings, and Relevance Vector Halos
+            pts.forEach((pt, i) => {
+                const px = xToPx(pt.x, width);
+                const py = yToPx(pt.y, height);
+
+                const isHovered = (i === state.hoveredPointIndex);
+                const isSV = state.models.svm && sol.svmIsSV && sol.svmIsSV[i];
+                const isRV = state.models.rvm && sol.rvmIsRV && sol.rvmIsRV[i];
+
+                // Hovered highlight ring
+                if (isHovered) {
+                    ctx.beginPath();
+                    ctx.arc(px, py, 16, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                    ctx.fill();
+                }
+
+                // RVM Relevance Vector Halo (Outer glowing emerald circle)
+                if (isRV) {
+                    ctx.beginPath();
+                    ctx.arc(px, py, 12, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(16, 185, 129, 0.25)';
+                    ctx.fill();
+                    ctx.strokeStyle = '#34d399';
+                    ctx.lineWidth = 2.2;
+                    ctx.stroke();
+                }
+
+                // SVM Support Vector Ring (Amber ring)
+                if (isSV) {
+                    ctx.beginPath();
+                    ctx.arc(px, py, 8.5, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#fbbf24';
+                    ctx.lineWidth = 2.0;
+                    ctx.stroke();
+                }
+
+                // Core Data Point Dot
+                ctx.beginPath();
+                ctx.arc(px, py, 4.2, 0, Math.PI * 2);
+                ctx.fillStyle = isHovered ? '#ffffff' : '#e2e8f0';
+                ctx.fill();
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+            });
+        }
+
+        /**
+         * Render Dual Weight Spectrum Bar Chart (w_i per training point i = 1..N)
+         */
+        function renderWeightsChart() {
+            const { ctx, width, height } = setupHiDPICanvas(weightsCanvas);
+            ctx.clearRect(0, 0, width, height);
+
+            const pts = state.points;
+            const n = pts.length;
+            if (n === 0) return;
+
+            const sol = state.solution;
+            const padLeft = 42;
+            const padRight = 14;
+            const padTop = 18;
+            const padBottom = 26;
+            const plotW = width - padLeft - padRight;
+            const plotH = height - padTop - padBottom;
+            const zeroY = padTop + plotH / 2;
+
+            // Find max weight magnitude for auto-scaling
+            let maxW = 0.5;
+            const checkMax = (arr) => {
+                if (!arr) return;
+                arr.forEach(v => { if (Math.abs(v) > maxW) maxW = Math.abs(v); });
+            };
+            if (state.models.krr) checkMax(sol.krrWeights);
+            if (state.models.svm) checkMax(sol.svmWeights);
+            if (state.models.rvm) checkMax(sol.rvmWeights);
+            if (state.models.l1)  checkMax(sol.l1Weights);
+            maxW = Math.min(8.0, maxW * 1.12);
+
+            // Zero line & grid
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padLeft, zeroY);
+            ctx.lineTo(width - padRight, zeroY);
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+            ctx.font = '10px JetBrains Mono';
+            ctx.fillText(`+${maxW.toFixed(1)}`, 4, padTop + 8);
+            ctx.fillText(` 0.0`, 4, zeroY + 3);
+            ctx.fillText(`-${maxW.toFixed(1)}`, 4, height - padBottom);
+
+            // Sort points by x coordinate so the bar chart aligns left-to-right with the 1D plot
+            const sortedIndices = pts.map((_, idx) => idx).sort((a, b) => pts[a].x - pts[b].x);
+
+            const groupWidth = plotW / n;
+            const activeSeries = [];
+            if (state.models.krr) activeSeries.push({ weights: sol.krrWeights, color: '#38bdf8', label: 'KRR' });
+            if (state.models.svm) activeSeries.push({ weights: sol.svmWeights, color: '#fbbf24', label: 'SVR' });
+            if (state.models.rvm) activeSeries.push({ weights: sol.rvmWeights, color: '#34d399', label: 'RVM' });
+            if (state.models.l1)  activeSeries.push({ weights: sol.l1Weights,  color: '#e879f9', label: 'L1' });
+
+            const m = Math.max(1, activeSeries.length);
+            const barW = Math.max(2, Math.min(10, (groupWidth * 0.76) / m));
+
+            sortedIndices.forEach((ptIdx, slot) => {
+                const groupX = padLeft + slot * groupWidth;
+
+                // Highlight column if hovered
+                if (ptIdx === state.hoveredPointIndex) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+                    ctx.fillRect(groupX, padTop, groupWidth, plotH);
+                }
+
+                activeSeries.forEach((s, sIdx) => {
+                    const w = s.weights[ptIdx] || 0;
+                    const clampedW = Math.max(-maxW, Math.min(maxW, w));
+                    const barH = (Math.abs(clampedW) / maxW) * (plotH / 2);
+                    const bx = groupX + (groupWidth - m * barW) / 2 + sIdx * barW;
+                    const by = clampedW >= 0 ? zeroY - barH : zeroY;
+
+                    ctx.fillStyle = s.color;
+                    ctx.fillRect(bx, by, Math.max(1.5, barW - 1), Math.max(1, barH));
+                });
+
+                // Mark Relevance Vector star / indicator at bottom
+                if (state.models.rvm && sol.rvmIsRV && sol.rvmIsRV[ptIdx]) {
+                    ctx.fillStyle = '#34d399';
+                    ctx.beginPath();
+                    ctx.arc(groupX + groupWidth / 2, height - 11, 3.2, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (state.models.svm && sol.svmIsSV && sol.svmIsSV[ptIdx]) {
+                    ctx.strokeStyle = '#fbbf24';
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.arc(groupX + groupWidth / 2, height - 11, 2.5, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            });
+        }
+
+        /**
+         * Render 2D Weight Space Contour Visualization (w1 vs w2)
+         * Shows Prior penalty contours + Elliptical Data Likelihood + MAP Optimum
+         */
+        function renderContourPlot() {
+            const { ctx, width, height } = setupHiDPICanvas(contourCanvas);
+            ctx.clearRect(0, 0, width, height);
+
+            const wMax = 1.8;
+            const cx = width / 2;
+            const cy = height / 2;
+            const scale = Math.min(width, height) / (2 * wMax);
+
+            const toPxX = (w1) => cx + w1 * scale;
+            const toPxY = (w2) => cy - w2 * scale;
+
+            // Coordinate axes
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(0, cy); ctx.lineTo(width, cy);
+            ctx.moveTo(cx, 0); ctx.lineTo(cx, height);
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.7)';
+            ctx.font = '10px JetBrains Mono';
+            ctx.fillText('w₁', width - 18, cy - 6);
+            ctx.fillText('w₂', cx + 6, 12);
+
+            const priorType = state.priorView;
+            const radii = [0.45, 0.85, 1.25];
+
+            // 1. Draw Prior Constant-Density Contours
+            radii.forEach((R, rIdx) => {
+                ctx.beginPath();
+                if (priorType === 'l2') {
+                    // Circle: w1^2 + w2^2 = R^2
+                    ctx.arc(cx, cy, R * scale, 0, Math.PI * 2);
+                    ctx.strokeStyle = rIdx === 1 ? '#38bdf8' : 'rgba(56, 189, 248, 0.35)';
+                    ctx.fillStyle = rIdx === 1 ? 'rgba(56, 189, 248, 0.12)' : 'transparent';
+                } else if (priorType === 'l1') {
+                    // Diamond: |w1| + |w2| = R
+                    ctx.moveTo(toPxX(R), toPxY(0));
+                    ctx.lineTo(toPxX(0), toPxY(R));
+                    ctx.lineTo(toPxX(-R), toPxY(0));
+                    ctx.lineTo(toPxX(0), toPxY(-R));
+                    ctx.closePath();
+                    ctx.strokeStyle = rIdx === 1 ? '#e879f9' : 'rgba(232, 121, 249, 0.35)';
+                    ctx.fillStyle = rIdx === 1 ? 'rgba(232, 121, 249, 0.12)' : 'transparent';
+                } else if (priorType === 'ard') {
+                    // Non-convex Student-t / L_p (p=0.45) hyper-sparse star contour: |w1|^p + |w2|^p = R^p
+                    const p = 0.42;
+                    const steps = 160;
+                    for (let s = 0; s <= steps; s++) {
+                        const theta = (s / steps) * Math.PI * 2;
+                        const cosT = Math.cos(theta);
+                        const sinT = Math.sin(theta);
+                        const w1 = R * Math.sign(cosT) * Math.pow(Math.abs(cosT), 2 / p);
+                        const w2 = R * Math.sign(sinT) * Math.pow(Math.abs(sinT), 2 / p);
+                        if (s === 0) ctx.moveTo(toPxX(w1), toPxY(w2));
+                        else ctx.lineTo(toPxX(w1), toPxY(w2));
+                    }
+                    ctx.closePath();
+                    ctx.strokeStyle = rIdx === 1 ? '#34d399' : 'rgba(52, 211, 153, 0.35)';
+                    ctx.fillStyle = rIdx === 1 ? 'rgba(52, 211, 153, 0.14)' : 'transparent';
+                } else if (priorType === 'svr') {
+                    // SVR flat zero-penalty dead-zone square around origin + L2 outside
+                    const dead = R * 0.55;
+                    ctx.rect(toPxX(-dead), toPxY(dead), dead * 2 * scale, dead * 2 * scale);
+                    ctx.strokeStyle = rIdx === 1 ? '#fbbf24' : 'rgba(251, 191, 36, 0.35)';
+                    ctx.fillStyle = rIdx === 1 ? 'rgba(251, 191, 36, 0.12)' : 'transparent';
+                }
+                ctx.lineWidth = rIdx === 1 ? 2.0 : 1.0;
+                ctx.fill();
+                ctx.stroke();
+            });
+
+            // 2. Draw Data Likelihood Contours centered at state.mleTarget
+            const mle = state.mleTarget;
+            const angle = 0.52; // Tilted covariance ellipse
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+
+            [0.28, 0.58, 0.92].forEach((ellR) => {
+                ctx.beginPath();
+                for (let s = 0; s <= 90; s++) {
+                    const t = (s / 90) * Math.PI * 2;
+                    const u = ellR * 1.15 * Math.cos(t);
+                    const v = ellR * 0.62 * Math.sin(t);
+                    const w1 = mle.w1 + u * cosA - v * sinA;
+                    const w2 = mle.w2 + u * sinA + v * cosA;
+                    if (s === 0) ctx.moveTo(toPxX(w1), toPxY(w2));
+                    else ctx.lineTo(toPxX(w1), toPxY(w2));
+                }
+                ctx.strokeStyle = 'rgba(244, 63, 94, 0.5)';
+                ctx.setLineDash([3, 3]);
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+                ctx.setLineDash([]);
+            });
+
+            // 3. Compute MAP Optimum (Minimizing Likelihood Quadratic + Prior Penalty)
+            const regStrength = 0.65 + Math.max(0, (Math.log10(state.params.lambda) + 3) * 0.25);
+            let bestW1 = 0, bestW2 = 0, minCost = Infinity;
+
+            // Fine grid + axis search to find exact MAP intersection
+            const gridSteps = 80;
+            for (let i = -gridSteps; i <= gridSteps; i++) {
+                const w1 = (i / gridSteps) * wMax;
+                for (let j = -gridSteps; j <= gridSteps; j++) {
+                    const w2 = (j / gridSteps) * wMax;
+                    // Rotated quadratic data loss around mle
+                    const dw1 = w1 - mle.w1;
+                    const dw2 = w2 - mle.w2;
+                    const u = dw1 * cosA + dw2 * sinA;
+                    const v = -dw1 * sinA + dw2 * cosA;
+                    const nll = (u * u) / (1.15 * 1.15) + (v * v) / (0.62 * 0.62);
+
+                    let pen = 0;
+                    if (priorType === 'l2') {
+                        pen = regStrength * (w1 * w1 + w2 * w2);
+                    } else if (priorType === 'l1') {
+                        pen = regStrength * 1.1 * (Math.abs(w1) + Math.abs(w2));
+                    } else if (priorType === 'ard') {
+                        // Student-t log prior penalty: log(1 + w_i^2 / s^2)
+                        const s2 = 0.08;
+                        pen = regStrength * 0.42 * (Math.log(1 + (w1 * w1) / s2) + Math.log(1 + (w2 * w2) / s2));
+                    } else if (priorType === 'svr') {
+                        const eps = state.params.epsilon * 1.6;
+                        const l1Eps = Math.max(0, Math.abs(w1) - eps) + Math.max(0, Math.abs(w2) - eps);
+                        pen = regStrength * 1.3 * l1Eps;
+                    }
+
+                    const cost = nll + pen;
+                    if (cost < minCost) {
+                        minCost = cost;
+                        bestW1 = w1;
+                        bestW2 = w2;
+                    }
+                }
+            }
+
+            // Snap near-zero axis values for crisp sparsity readout
+            if (Math.abs(bestW1) < 0.04) bestW1 = 0;
+            if (Math.abs(bestW2) < 0.04) bestW2 = 0;
+
+            // Draw MLE Target Crosshair
+            const mlePxX = toPxX(mle.w1);
+            const mlePxY = toPxY(mle.w2);
+            ctx.beginPath();
+            ctx.arc(mlePxX, mlePxY, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#f43f5e';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Draw Arrow from MLE to MAP
+            const mapPxX = toPxX(bestW1);
+            const mapPxY = toPxY(bestW2);
+            ctx.beginPath();
+            ctx.moveTo(mlePxX, mlePxY);
+            ctx.lineTo(mapPxX, mapPxY);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Draw MAP Point
+            ctx.beginPath();
+            ctx.arc(mapPxX, mapPxY, 6.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#10b981';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Update coordinate & sparsity readout
+            document.getElementById('contour-map-coords').textContent =
+                `MAP w* = (${bestW1.toFixed(2)}, ${bestW2.toFixed(2)})`;
+            const isSparse = (bestW1 === 0 || bestW2 === 0);
+            const tagEl = document.getElementById('contour-sparsity-tag');
+            if (isSparse) {
+                tagEl.textContent = `Sparse! Axis-Aligned (${bestW1 === 0 && bestW2 === 0 ? 'Both=0' : (bestW1 === 0 ? 'w₁=0' : 'w₂=0')})`;
+                tagEl.className = 'text-emerald-400 font-semibold';
+            } else {
+                tagEl.textContent = 'Dense Solution (w₁≠0, w₂≠0)';
+                tagEl.className = 'text-sky-400';
+            }
+        }
+
+        function renderAll() {
+            renderMainPlot();
+            renderWeightsChart();
+            renderContourPlot();
+        }
+
+        /***********************************************************************
+         * 6. INTERACTIVE EVENT LISTENERS
+         ***********************************************************************/
+
+        // Main Plot Mouse / Touch Interactions (Add, Drag, Delete points)
+        function getCanvasCoords(canvas, evt) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+            const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+            return {
+                px: clientX - rect.left,
+                py: clientY - rect.top,
+                width: rect.width,
+                height: rect.height
+            };
+        }
+
+        function findNearestPoint(px, py, width, height, thresholdPx = 14) {
+            let bestIdx = -1;
+            let bestDist = thresholdPx;
+            state.points.forEach((pt, idx) => {
+                const dx = xToPx(pt.x, width) - px;
+                const dy = yToPx(pt.y, height) - py;
+                const dist = Math.hypot(dx, dy);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestIdx = idx;
+                }
+            });
+            return bestIdx;
+        }
+
+        mainCanvas.addEventListener('pointerdown', (evt) => {
+            const { px, py, width, height } = getCanvasCoords(mainCanvas, evt);
+            const hitIdx = findNearestPoint(px, py, width, height, 15);
+
+            // Shift+Click or Right-Click deletes point
+            if (hitIdx !== -1 && (evt.shiftKey || evt.button === 2)) {
+                evt.preventDefault();
+                state.points.splice(hitIdx, 1);
+                state.hoveredPointIndex = -1;
+                solveAllModels();
+                return;
+            }
+
+            if (hitIdx !== -1) {
+                state.draggingPointIndex = hitIdx;
+                mainCanvas.setPointerCapture(evt.pointerId);
+            } else if (evt.button === 0) {
+                // Add new point
+                const newX = Math.max(BOUNDS.xMin + 0.1, Math.min(BOUNDS.xMax - 0.1, pxToX(px, width)));
+                const newY = Math.max(BOUNDS.yMin + 0.1, Math.min(BOUNDS.yMax - 0.1, pxToY(py, height)));
+                state.points.push({ x: newX, y: newY, id: Date.now() });
+                state.draggingPointIndex = state.points.length - 1;
+                solveAllModels();
+            }
+        });
+
+        mainCanvas.addEventListener('pointermove', (evt) => {
+            const { px, py, width, height } = getCanvasCoords(mainCanvas, evt);
+            if (state.draggingPointIndex !== -1) {
+                const pt = state.points[state.draggingPointIndex];
+                if (pt) {
+                    pt.x = Math.max(BOUNDS.xMin + 0.05, Math.min(BOUNDS.xMax - 0.05, pxToX(px, width)));
+                    pt.y = Math.max(BOUNDS.yMin + 0.05, Math.min(BOUNDS.yMax - 0.05, pxToY(py, height)));
+                    solveAllModels();
+                }
+                return;
+            }
+
+            const hitIdx = findNearestPoint(px, py, width, height, 15);
+            if (hitIdx !== state.hoveredPointIndex) {
+                state.hoveredPointIndex = hitIdx;
+                renderAll();
+            }
+
+            // Update tooltip
+            const tooltip = document.getElementById('plot-tooltip');
+            if (hitIdx !== -1) {
+                const pt = state.points[hitIdx];
+                const sol = state.solution;
+                const wKrr = (sol.krrWeights[hitIdx] || 0).toFixed(2);
+                const wSvm = (sol.svmWeights[hitIdx] || 0).toFixed(2);
+                const wRvm = (sol.rvmWeights[hitIdx] || 0).toFixed(2);
+                tooltip.innerHTML = `
+                    <div class="font-bold text-white mb-0.5">Point #${hitIdx + 1} (${pt.x.toFixed(2)}, ${pt.y.toFixed(2)})</div>
+                    <div class="text-sky-400">w_KRR = ${wKrr}</div>
+                    <div class="text-amber-400">w_SVR = ${wSvm} ${sol.svmIsSV[hitIdx] ? '[SV]' : ''}</div>
+                    <div class="text-emerald-400">w_RVM = ${wRvm} ${sol.rvmIsRV[hitIdx] ? '[RV ★]' : ''}</div>
+                `;
+                tooltip.classList.remove('hidden');
+            } else {
+                tooltip.classList.add('hidden');
+            }
+        });
+
+        mainCanvas.addEventListener('pointerup', () => {
+            state.draggingPointIndex = -1;
+        });
+        mainCanvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Hover on Dual Weights Bar Chart highlights corresponding point on Main Plot
+        weightsCanvas.addEventListener('pointermove', (evt) => {
+            const { px, width } = getCanvasCoords(weightsCanvas, evt);
+            const n = state.points.length;
+            if (n === 0) return;
+            const padLeft = 42, padRight = 14;
+            const plotW = width - padLeft - padRight;
+            const slot = Math.floor(((px - padLeft) / plotW) * n);
+            const sortedIndices = state.points.map((_, idx) => idx).sort((a, b) => state.points[a].x - state.points[b].x);
+            if (slot >= 0 && slot < n) {
+                const ptIdx = sortedIndices[slot];
+                if (state.hoveredPointIndex !== ptIdx) {
+                    state.hoveredPointIndex = ptIdx;
+                    renderAll();
+                }
+            }
+        });
+        weightsCanvas.addEventListener('pointerleave', () => {
+            state.hoveredPointIndex = -1;
+            renderAll();
+        });
+
+        // 2D Contour Canvas Dragging for MLE Target
+        contourCanvas.addEventListener('pointerdown', (evt) => {
+            state.draggingMLE = true;
+            contourCanvas.setPointerCapture(evt.pointerId);
+            updateMLEFromPointer(evt);
+        });
+        contourCanvas.addEventListener('pointermove', (evt) => {
+            if (state.draggingMLE) updateMLEFromPointer(evt);
+        });
+        contourCanvas.addEventListener('pointerup', () => {
+            state.draggingMLE = false;
+        });
+
+        function updateMLEFromPointer(evt) {
+            const { px, py, width, height } = getCanvasCoords(contourCanvas, evt);
+            const wMax = 1.8;
+            const scale = Math.min(width, height) / (2 * wMax);
+            const w1 = (px - width / 2) / scale;
+            const w2 = (height / 2 - py) / scale;
+            state.mleTarget.w1 = Math.max(-1.6, Math.min(1.6, w1));
+            state.mleTarget.w2 = Math.max(-1.6, Math.min(1.6, w2));
+            renderContourPlot();
+        }
+
+        /***********************************************************************
+         * 7. UI CONTROLS BINDING
+         ***********************************************************************/
+        function syncUIFromState() {
+            document.getElementById('slider-lengthscale').value = state.params.lengthscale;
+            document.getElementById('val-lengthscale').textContent = state.params.lengthscale.toFixed(2);
+
+            document.getElementById('slider-lambda').value = Math.log10(state.params.lambda);
+            document.getElementById('val-lambda').textContent = state.params.lambda.toFixed(3);
+
+            document.getElementById('slider-epsilon').value = state.params.epsilon;
+            document.getElementById('val-epsilon').textContent = state.params.epsilon.toFixed(2);
+
+            document.getElementById('slider-noise').value = state.params.noiseStd;
+            document.getElementById('val-noise').textContent = state.params.noiseStd.toFixed(2);
+
+            document.getElementById('toggle-krr').checked = state.models.krr;
+            document.getElementById('toggle-svm').checked = state.models.svm;
+            document.getElementById('toggle-rvm').checked = state.models.rvm;
+            document.getElementById('toggle-l1').checked = state.models.l1;
+
+            document.getElementById('toggle-gp-band').checked = state.overlays.gpBand;
+            document.getElementById('toggle-rvm-band').checked = state.overlays.rvmBand;
+            document.getElementById('toggle-eps-tube').checked = state.overlays.epsTube;
+            document.getElementById('toggle-rvm-basis').checked = state.overlays.rvmBasis;
+
+            updatePriorTabsUI();
+            updateDatasetButtonsUI();
+        }
+
+        // Sliders
+        document.getElementById('slider-lengthscale').addEventListener('input', (e) => {
+            state.params.lengthscale = parseFloat(e.target.value);
+            document.getElementById('val-lengthscale').textContent = state.params.lengthscale.toFixed(2);
+            solveAllModels();
+        });
+        document.getElementById('slider-lambda').addEventListener('input', (e) => {
+            state.params.lambda = Math.pow(10, parseFloat(e.target.value));
+            document.getElementById('val-lambda').textContent = state.params.lambda.toFixed(3);
+            solveAllModels();
+        });
+        document.getElementById('slider-epsilon').addEventListener('input', (e) => {
+            state.params.epsilon = parseFloat(e.target.value);
+            document.getElementById('val-epsilon').textContent = state.params.epsilon.toFixed(2);
+            solveAllModels();
+        });
+        document.getElementById('slider-noise').addEventListener('input', (e) => {
+            state.params.noiseStd = parseFloat(e.target.value);
+            document.getElementById('val-noise').textContent = state.params.noiseStd.toFixed(2);
+            solveAllModels();
+        });
+
+        // Model & Overlay Checkboxes
+        ['krr', 'svm', 'rvm', 'l1'].forEach(key => {
+            document.getElementById(`toggle-${key}`).addEventListener('change', (e) => {
+                state.models[key] = e.target.checked;
+                renderAll();
+            });
+        });
+        document.getElementById('toggle-gp-band').addEventListener('change', e => { state.overlays.gpBand = e.target.checked; renderAll(); });
+        document.getElementById('toggle-rvm-band').addEventListener('change', e => { state.overlays.rvmBand = e.target.checked; renderAll(); });
+        document.getElementById('toggle-eps-tube').addEventListener('change', e => { state.overlays.epsTube = e.target.checked; renderAll(); });
+        document.getElementById('toggle-rvm-basis').addEventListener('change', e => { state.overlays.rvmBasis = e.target.checked; renderAll(); });
+
+        // Dataset Buttons
+        function updateDatasetButtonsUI() {
+            document.querySelectorAll('.dataset-btn').forEach(btn => {
+                const active = btn.dataset.dataset === state.datasetType;
+                btn.className = active
+                    ? 'dataset-btn py-1.5 px-2 rounded-lg text-xs font-medium border border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-300 transition'
+                    : 'dataset-btn py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:border-slate-400 transition';
+            });
+        }
+        document.querySelectorAll('.dataset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                state.datasetType = btn.dataset.dataset;
+                generateDataset(state.datasetType);
+            });
+        });
+
+        document.getElementById('btn-clear-points').addEventListener('click', () => {
+            state.points = [];
+            solveAllModels();
+        });
+        document.getElementById('btn-reset-data').addEventListener('click', () => {
+            generateDataset(state.datasetType, Math.floor(Math.random() * 100000));
+        });
+
+        // Prior Contour Tabs
+        const PRIOR_DESCRIPTIONS = {
+            l2: `<strong>L2 / Gaussian Prior (KRR &amp; GP):</strong> Circular contours <span class="font-mono">w₁² + w₂² ≤ R²</span> are isotropic with no corners. The elliptical likelihood almost never touches on an axis, making all weights non-zero (100% dense).`,
+            l1: `<strong>L1 / Laplace Prior (LASSO):</strong> Diamond contours <span class="font-mono">|w₁| + |w₂| ≤ R</span> have sharp corners along the coordinate axes. Likelihood ellipses frequently intersect a corner first, setting one weight to exact zero.`,
+            ard: `<strong>Student-t / ARD Prior (RVM):</strong> Hierarchical Gamma-Gaussian priors marginalize to non-convex hyper-sparse spikes along the axes. Probability mass concentrates heavily on the axes, aggressively pruning redundant weights to zero.`,
+            svr: `<strong>SVR ε-Insensitive Zone:</strong> Flat dead-zone <span class="font-mono">|y - f(x)| ≤ ε</span> where errors incur zero penalty, combined with L2 regularization outside the tube. Data points inside the tube receive dual weight <span class="font-mono">wᵢ = 0</span>.`
+        };
+
+        function updatePriorTabsUI() {
+            document.querySelectorAll('.prior-tab').forEach(btn => {
+                const active = btn.dataset.prior === state.priorView;
+                btn.className = active
+                    ? 'prior-tab py-1.5 px-2 rounded-lg transition bg-sky-500 text-white shadow'
+                    : 'prior-tab py-1.5 px-2 rounded-lg transition text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+            });
+            document.getElementById('contour-explanation').innerHTML = PRIOR_DESCRIPTIONS[state.priorView];
+        }
+
+        document.querySelectorAll('.prior-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                state.priorView = btn.dataset.prior;
+                updatePriorTabsUI();
+                renderContourPlot();
+            });
+        });
+
+        // Guided Lessons Walkthrough Navigation
+        function setLesson(idx, applyPreset = true) {
+            state.currentLesson = (idx + LESSONS.length) % LESSONS.length;
+            const lesson = LESSONS[state.currentLesson];
+
+            document.getElementById('lesson-step-badge').textContent = `Lesson ${state.currentLesson + 1} of ${LESSONS.length}`;
+            document.getElementById('lesson-title').innerHTML = lesson.title;
+            document.getElementById('lesson-body').innerHTML = lesson.body;
+            document.getElementById('lesson-formula').textContent = lesson.formula;
+            document.getElementById('lesson-mission').textContent = lesson.mission;
+
+            document.querySelectorAll('.lesson-tab').forEach((btn, bIdx) => {
+                btn.className = (bIdx === state.currentLesson)
+                    ? 'lesson-tab py-1.5 px-2 rounded-lg text-xs font-mono font-medium transition text-center bg-indigo-600 text-white shadow-sm'
+                    : 'lesson-tab py-1.5 px-2 rounded-lg text-xs font-mono font-medium transition text-center bg-slate-200/70 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-300/60';
+            });
+
+            if (applyPreset && lesson.preset) {
+                lesson.preset();
+                syncUIFromState();
+                solveAllModels();
+            }
+        }
+
+        document.querySelectorAll('.lesson-tab').forEach(btn => {
+            btn.addEventListener('click', () => setLesson(parseInt(btn.dataset.lesson, 10), true));
+        });
+        document.getElementById('prev-lesson-btn').addEventListener('click', () => setLesson(state.currentLesson - 1, true));
+        document.getElementById('next-lesson-btn').addEventListener('click', () => setLesson(state.currentLesson + 1, true));
+        document.getElementById('apply-lesson-preset').addEventListener('click', () => setLesson(state.currentLesson, true));
+
+        // Dark / Light Theme Toggle
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            renderAll();
+        });
+
+        // Window Resize Handler
+        window.addEventListener('resize', () => {
+            renderAll();
+        });
+
+        // Initialize Application on Load
+        window.onload = () => {
+            generateDataset('sinc');
+            setLesson(0, false); // Start with all 3 models visible on initial load so user sees immediate comparison
+            syncUIFromState();
+            solveAllModels();
+        };
+    </script>
+</body>
+</html>
